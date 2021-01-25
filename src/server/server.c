@@ -130,6 +130,7 @@ static int socket_init() {
 
 int main (int argc, char *argv[]) {
 
+    //注册信号处理守护进程退出的情形
     struct sigaction sa;
     sa.sa_handler = daemon_exit;
     sigemptyset(&sa.sa_mask);
@@ -198,7 +199,7 @@ int main (int argc, char *argv[]) {
     int list_size = 0;
     int err = mlib_getchnlist(&list, &list_size);
     if (err) {
-
+        syslog(LOG_ERR, "Get channel failed.");
     }
 
     //创建节目单线程
@@ -207,7 +208,7 @@ int main (int argc, char *argv[]) {
     //创建频道线程
     int i;
     for (i = 0; i < list_size; i++) {
-        syslog(LOG_DEBUG, "pthread_create, chnid = %d\n", (list + i)->chnid);
+        // syslog(LOG_DEBUG, "pthread_create, chnid = %d\n", (list + i)->chnid);
         thr_channel_create(list + i);//每个频道创建一个线程，每个线程发送一个频道的数据
         // if (error)
     }

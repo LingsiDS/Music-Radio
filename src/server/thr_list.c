@@ -57,16 +57,13 @@ static void *thr_list(void *p) {
     char ipstr[30];
     inet_ntop(AF_INET, &serv_addr.sin_addr.s_addr, ipstr, 30);
     while (1) {
-        syslog(LOG_INFO, "thr_list serv_addr: %d\n", ipstr);
+        // syslog(LOG_INFO, "thr_list serv_addr: %d\n", ipstr);
         ret = sendto(serv_sd, entlistp, totalsize, 0, (void *)&serv_addr, sizeof(serv_addr));
-        syslog(LOG_INFO, "thr_list list msg size: %d\n", totalsize);  
-
         if (ret < 0) {
             syslog(LOG_WARNING, "sendto(serv_sd, entlistp...%s", strerror(errno));
         } 
-        syslog(LOG_INFO, "before sleep()\n"); 
+        syslog(LOG_INFO, "thr_list send success, list messsage size: %d\n", totalsize);  
         sleep(1);
-        syslog(LOG_INFO, "after sleep()\n"); 
     }
 }
 

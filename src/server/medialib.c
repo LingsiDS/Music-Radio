@@ -17,7 +17,7 @@
 
 #define PATH_SIZE 1024
 #define LINE_BUF_SIZE 1024
-#define MP3_BITRATE 256*1024
+#define MP3_BITRATE 64*1024
 
 //该结构包括了描述一个频道的所有信息
 struct channel_context_st {
@@ -35,17 +35,18 @@ struct channel_context_st channel[CHNNR + 1];
 
 //解析给定的频道路径，得到该频道的所有有用的信息返回
 static struct channel_context_st *path2entry(const char *path) {//path is something like “~/media/ch1“
-    syslog(LOG_INFO, "current path: %s\n", path);
+    // syslog(LOG_INFO, "current path: %s\n", path);
     char pathstr[PATH_SIZE] = {'\0'};
     char linebuf[LINE_BUF_SIZE];
 
     FILE *fp;
     struct channel_context_st *me;//存储该路径指定频道的所有有用信息
-    static chnid_t curr_id = MIN_CHNID;//当前解析到哪一个频道
+    static chnid_t curr_id = MIN_CHNID;//当前解析到哪一个频道，static
+
     strcat(pathstr, path);
     strcat(pathstr, "/desc.txt");
     fp = fopen(pathstr, "r");
-    syslog(LOG_INFO, "channel dir:%s\n", pathstr);
+    // syslog(LOG_INFO, "channel dir:%s\n", pathstr);
     if (fp == NULL) {//没有desc.txt文件
         syslog(LOG_INFO, "%s is not a channel dir(can't finid desc.txt", path);
         return NULL;
@@ -73,7 +74,6 @@ static struct channel_context_st *path2entry(const char *path) {//path is someth
     strncpy(pathstr, path, PATH_SIZE - 1);//warning：strncpy不拷贝最后一个字节，修改最后一个参数修改为PATH_SIZE - 1
     strncat(pathstr, "/*.mp3", PATH_SIZE - 1);//pattern，准备解析所有.mp3文件s
     if (glob(pathstr, 0, NULL, &me->mp3glob) != 0) {
-        curr_id++;
         syslog(LOG_ERR, "%s is not a channel dir(can not find mp3 files)", path);
         free(me);
         return NULL;
@@ -105,9 +105,9 @@ int mlib_getchnlist(struct mlib_listentry_st** result, int *resnum) {
     }
 
     snprintf(path, PATH_SIZE, "%s/*", serv_conf.media_dir);//生成待解析的路径pattern
-    syslog(LOG_DEBUG, "media path = %s\n", path);
-    //glob(): find pathnames matching a pattern
+    // syslog(LOG_DEBUG, "media path = %s\n", path);
     
+    //glob(): find pathnames matching a pattern
     int errcode;
     if (errcode = glob(path, 0, NULL, &globres)) {
         syslog(LOG_INFO, "glob(): media path resolve failed. errcode = %d\n", errcode);
@@ -189,16 +189,17 @@ ssize_t mlib_readcnt(chnid_t chnid, void *buf, size_t size) {
     int len;
     int next_ret = 0;
 
-    syslog(LOG_DEBUG, "ready to call mytbf_fetchtoken(chnid = %d, size = %d)\n", chnid, size);
+    // syslog(LOG_DEBUG, "ready to call mytbf_fetchtoken(chnid = %d, size = %d)\n", chnid, size);
     tbfsize = mytbf_fetchtoken(channel[chnid].tbf, size);//从当前频道的令牌桶内获得size个token
     syslog(LOG_INFO, "current tbf(): %d", mytbf_checktoken(channel[chnid].tbf));//查看当前令牌桶的token数量
 
     while (1) {
         //pread, pwrite: read from or write to a file descriptor at a given offset
+        syslog(LOG_DEBUG, "chnid %d, offset = %d, pos = %d\n", chnid, channel[chnid].offset, channel[chnid].pos);
         len = pread(channel[chnid].fd, buf, tbfsize, channel[chnid].offset);
         if (len < 0) {//正常情况下，len为读取的字节数，len < 0, pread 出错
             //这首歌可能有问题，错误不至于退出，读取下一首歌
-            syslog(LOG_WARNING, "media file %s pread(): %s", channel[chnid].mp3glob.gl_pathv[channel[chnid].pos], strerror(errno));
+            syslog(LOG_WARNING, "chnid = %d, media file %s pread(): %s", chnid, channel[chnid].mp3glob.gl_pathv[channel[chnid].pos], strerror(errno));
             if (open_next(chnid) < 0) //最后一首歌
                 break;
         } else if (len == 0) {

@@ -7,6 +7,7 @@ struct client_conf_st {
     char *rcvport;
     char *mgroup;
     char *player_cmd;
+    char *client_net_device;
 };
 
 extern struct client_conf_st client_conf;

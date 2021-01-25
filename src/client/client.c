@@ -4,8 +4,8 @@
 #include <getopt.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-// #include <netinet/in.h>
-// #include <netinet/ip.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
 #include <arpa/inet.h>
 #include <net/if.h>
 #include <string.h>
@@ -24,16 +24,18 @@
 //     int            imr_ifindex;   /* interface index */
 // };
 
+#define C_NET_DEVICE "eth0"
 
 struct client_conf_st client_conf = { DEFAULT_PORT,
-        DEFAULT_MGROUP, DEFAULT_PLAYER_CMD};
+        DEFAULT_MGROUP, DEFAULT_PLAYER_CMD,C_NET_DEVICE};
 
 
 static void print_help() {
-    printf("-P  --port 指定端口号\n");
-    printf("-M  --mgroup 指定多播组\n");
-    printf("-p  --player 指定播放器\n");
-    printf("-H  --helper 显示帮组\n");
+    printf("-I  --internet  指定网卡\n");
+    printf("-P  --port      指定端口号\n");
+    printf("-M  --mgroup    指定多播组\n");
+    printf("-p  --player    指定播放器\n");
+    printf("-H  --helper    显示帮组\n");
 }
 
 
@@ -59,21 +61,24 @@ int main (int argc, char *argv[]) {
     /*  配置文件的优先级，从低到高
             默认值，配置文件，环境变量，命令行参数
         命令行参数
-            printf("-P  --port 指定端口号\n");
-            printf("-M  --mgroup 指定多播组\n");
-            printf("-p  --player 指定播放器\n");
-            printf("-H  --helper 显示帮组\n");
+            printf("-I  --internet  指定网卡\n");
+            printf("-P  --port      指定端口号\n");
+            printf("-M  --mgroup    指定多播组\n");
+            printf("-p  --player    指定播放器\n");
+            printf("-H  --helper    显示帮组\n");
     */
 
     int arg_idx = 0;
-    struct option option_array[] = {{"port", 1, NULL, 'P'},{"mgroup", 1, NULL, 'M'},\
-                                    {"player", 1, NULL, 'p'},{"help", 1, NULL, 'H'},\
-                                    {NULL, 0, NULL, 0}};
+    struct option option_array[] = {{"internet", 1, NULL, 'I'},{"port", 1, NULL, 'P'},{"mgroup", 1, NULL, 'M'},\
+                                    {"player", 1, NULL, 'p'},{"help", 1, NULL, 'H'},{NULL, 0, NULL, 0}};
     while (1) {
-        int c = getopt_long(argc, argv, "P:M:p:H", option_array, &arg_idx);
+        int c = getopt_long(argc, argv, "I:P:M:p:H", option_array, &arg_idx);
         if (c < 0) 
             break;
         switch (c) {
+            case 'I':
+                client_conf.client_net_device = optarg;
+                break;
             case 'P':
                 client_conf.rcvport = optarg;
                 break;
@@ -105,9 +110,9 @@ int main (int argc, char *argv[]) {
     if (inet_pton(AF_INET, "0.0.0.0", &mreq.imr_address) != 1) {
         fprintf(stderr, "inet_pton() failed\n");
     }
-    mreq.imr_ifindex = if_nametoindex("eth0");
+    mreq.imr_ifindex = if_nametoindex(client_conf.client_net_device);
     
-    if (setsockopt(sd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
+    if (setsockopt(sd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {//加入多播组
         perror("setsockopt()");
         exit(1);
     }
@@ -130,7 +135,7 @@ int main (int argc, char *argv[]) {
     }
     
     int pd[2];
-    if (pipe(pd) < 0) {
+    if (pipe(pd) < 0) {//创建管道
         perror("pipe()");
         exit(1);
     }
@@ -153,7 +158,8 @@ int main (int argc, char *argv[]) {
         exit(1);   
     }
 
-    //父进程从网络上接受数据，并且通过管道发送给子进程
+    //以下为父进程，父进程从网络上接受数据，并且通过管道发送给子进程
+    close(pd[0]);
     struct msg_list_st *msg_list;
     msg_list = (struct msg_list_st *)malloc(MSG_LIST_MAX);//申请一块缓冲区接受频道信息，大小为一个频道单包的最大长度
     if (msg_list == NULL) {
@@ -173,7 +179,7 @@ int main (int argc, char *argv[]) {
             continue;
         }
         if (msg_list->chnid != LIST_CHNID) {
-            fprintf(stderr, "Ignore: Channel list id not match.\n");
+            fprintf(stderr, "Ignore (Debug): Channel list id not match.\n");
             continue;
         }
         break;
@@ -188,6 +194,7 @@ int main (int argc, char *argv[]) {
     free(msg_list);//释放从网络接受数据的缓冲器
 
     int chosen = 0;//选择的频道id
+    
     while (scanf("%d", &chosen) != 1) {
         fprintf(stderr, "请输入正确的频道号\n");
         exit(1);
@@ -218,12 +225,14 @@ int main (int argc, char *argv[]) {
         if (msg_channel->chnid == chosen) {
             fprintf(stdout, "Accept: channel[%d] recived\n", msg_channel->chnid);
             if (writen(pd[1], (char *)(msg_channel->data), packet_len - sizeof(chnid_t)) < 0)//写够packet_len - sizeof(chnid_t)个字节
+                fprintf(stderr, "writen() failed.\n");
                 exit(1);//写入出错
         }
 
     }
     
     free(msg_channel);//可以结合信号处理和钩子函数处理
+    close(pd[1]);
     close(sd);
 
     exit(0);

@@ -46,15 +46,15 @@ static void *thr_channel_snder(void *ptr) {
 
     while (1) {
         //len = mlib_readchn(ent->chnid, sbufp->data, MAX_DATA);
-        syslog(LOG_DEBUG, "ready to call mlib_readchn()\n");
-        len = mlib_readcnt(ent->chnid, sbufp->data, 128 * 1024 / 8);
+        // syslog(LOG_DEBUG, "ready to call mlib_readchn()\n");
+        len = mlib_readcnt(ent->chnid, sbufp->data, 128*1024/8);
 
         syslog(LOG_DEBUG, "mlib_readchn() len: %d", len);
         if (sendto(serv_sd, sbufp, len, 0, (void *)&serv_addr, sizeof(serv_addr)) < 0) {
             syslog(LOG_ERR, "thr_channel(%d): sendto(): %s", ent->chnid, strerror(errno));
             break;
         }
-        syslog(LOG_DEBUG, "thr_channel send msg success, msg size = %d\n", len);
+        syslog(LOG_DEBUG, "channel[%d] send msg success, msg size = %d\n", ent->chnid, len);
         sched_yield();
     }
     pthread_exit(NULL);
